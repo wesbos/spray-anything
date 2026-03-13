@@ -2,7 +2,7 @@ node_modules/
 debug_steps/
 *_sprayed.png
 *_filmstrip.png
-!example_filmstrip.png
+!example/*
 __pycache__/
 *.pyc
 .DS_Store
