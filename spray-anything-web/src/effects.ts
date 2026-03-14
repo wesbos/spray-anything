@@ -1,5 +1,6 @@
 import { type Img, createImg, reflectCoord } from "./image.ts";
 import { SeededRNG } from "./rng.ts";
+import { gpuConvolve2d, gpuRemap, gpuDilate } from "./webgpu.ts";
 
 function sampleBilinear(img: Img, fx: number, fy: number): number[] {
   const { w, h, c } = img;
@@ -35,7 +36,7 @@ function sampleBilinear(img: Img, fx: number, fy: number): number[] {
   return result;
 }
 
-export function remap(img: Img, mapX: Float32Array, mapY: Float32Array): Img {
+export function remapCpu(img: Img, mapX: Float32Array, mapY: Float32Array): Img {
   const out = createImg(img.w, img.h, img.c);
   const { w, h, c, data } = img;
   if (c === 3) {
@@ -111,27 +112,95 @@ export function remap(img: Img, mapX: Float32Array, mapY: Float32Array): Img {
   return out;
 }
 
-export function convolve2d(img: Img, kernel: ArrayLike<number>, kw: number, kh: number): Img {
+export async function remap(img: Img, mapX: Float32Array, mapY: Float32Array): Promise<Img> {
+  const gpu = await gpuRemap(img, mapX, mapY);
+  if (gpu) return gpu;
+  return remapCpu(img, mapX, mapY);
+}
+
+function convolve2dCpu(img: Img, kernel: ArrayLike<number>, kw: number, kh: number): Img {
   const out = createImg(img.w, img.h, img.c);
   const { w, h, c } = img;
   const khh = (kh - 1) >> 1,
     kwh = (kw - 1) >> 1;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      for (let ch = 0; ch < c; ch++) {
+
+  // Precompute sparse kernel: only non-zero entries (huge win for motion blur
+  // where a 25x25 grid has ~25 non-zero entries out of 625)
+  const sparseKy: number[] = [];
+  const sparseKx: number[] = [];
+  const sparseW: number[] = [];
+  for (let ky = 0; ky < kh; ky++) {
+    for (let kx = 0; kx < kw; kx++) {
+      const v = kernel[ky * kw + kx]!;
+      if (v !== 0) {
+        sparseKy.push(ky - khh);
+        sparseKx.push(kx - kwh);
+        sparseW.push(v);
+      }
+    }
+  }
+  const sparseLen = sparseW.length;
+
+  if (c === 1) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
         let sum = 0;
-        for (let ky = 0; ky < kh; ky++) {
-          const sy = reflectCoord(y + ky - khh, h);
-          for (let kx = 0; kx < kw; kx++) {
-            const sx = reflectCoord(x + kx - kwh, w);
-            sum += img.data[(sy * w + sx) * c + ch]! * kernel[ky * kw + kx]!;
-          }
+        for (let i = 0; i < sparseLen; i++) {
+          const sy = reflectCoord(y + sparseKy[i]!, h);
+          const sx = reflectCoord(x + sparseKx[i]!, w);
+          sum += img.data[sy * w + sx]! * sparseW[i]!;
         }
-        out.data[(y * w + x) * c + ch] = sum;
+        out.data[y * w + x] = sum;
+      }
+    }
+  } else if (c === 3) {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let s0 = 0,
+          s1 = 0,
+          s2 = 0;
+        for (let i = 0; i < sparseLen; i++) {
+          const sy = reflectCoord(y + sparseKy[i]!, h);
+          const sx = reflectCoord(x + sparseKx[i]!, w);
+          const idx = (sy * w + sx) * 3;
+          const wt = sparseW[i]!;
+          s0 += img.data[idx]! * wt;
+          s1 += img.data[idx + 1]! * wt;
+          s2 += img.data[idx + 2]! * wt;
+        }
+        const oi = (y * w + x) * 3;
+        out.data[oi] = s0;
+        out.data[oi + 1] = s1;
+        out.data[oi + 2] = s2;
+      }
+    }
+  } else {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        for (let ch = 0; ch < c; ch++) {
+          let sum = 0;
+          for (let i = 0; i < sparseLen; i++) {
+            const sy = reflectCoord(y + sparseKy[i]!, h);
+            const sx = reflectCoord(x + sparseKx[i]!, w);
+            sum += img.data[(sy * w + sx) * c + ch]! * sparseW[i]!;
+          }
+          out.data[(y * w + x) * c + ch] = sum;
+        }
       }
     }
   }
   return out;
+}
+
+export async function convolve2d(
+  img: Img,
+  kernel: ArrayLike<number>,
+  kw: number,
+  kh: number,
+): Promise<Img> {
+  const gpu = await gpuConvolve2d(img, kernel, kw, kh);
+  if (gpu) return gpu;
+  return convolve2dCpu(img, kernel, kw, kh);
 }
 
 export function generateClouds(h: number, w: number, seed = 0): Img {
@@ -180,11 +249,11 @@ export function generateClouds(h: number, w: number, seed = 0): Img {
   return out;
 }
 
-export function ripple(
+export async function ripple(
   img: Img,
   amount: number,
   size: "small" | "medium" | "large" = "large",
-): Img {
+): Promise<Img> {
   const wl = { small: 8, medium: 18, large: 40 }[size];
   const { w, h } = img;
   const rng = new SeededRNG(123);
@@ -248,12 +317,12 @@ export function buildMotionKernel(
   return { kernel, ks };
 }
 
-export function motionBlur(img: Img, angleDeg: number, distance: number): Img {
+export async function motionBlur(img: Img, angleDeg: number, distance: number): Promise<Img> {
   const { kernel, ks } = buildMotionKernel(angleDeg, distance);
   return convolve2d(img, kernel, ks, ks);
 }
 
-export function displace(img: Img, dmap: Img, hScale: number, vScale: number): Img {
+export async function displace(img: Img, dmap: Img, hScale: number, vScale: number): Promise<Img> {
   const { w, h } = img;
   const mapX = new Float32Array(w * h);
   const mapY = new Float32Array(w * h);
@@ -277,15 +346,15 @@ export function mezzotint(gray: Img, rng: SeededRNG): Img {
   return out;
 }
 
-export function sobel5x5(gray: Img): Img {
+export async function sobel5x5(gray: Img): Promise<Img> {
   const kx = [
     -1, -2, 0, 2, 1, -4, -8, 0, 8, 4, -6, -12, 0, 12, 6, -4, -8, 0, 8, 4, -1, -2, 0, 2, 1,
   ];
   const ky = [
     -1, -4, -6, -4, -1, -2, -8, -12, -8, -2, 0, 0, 0, 0, 0, 2, 8, 12, 8, 2, 1, 4, 6, 4, 1,
   ];
-  const gx = convolve2d(gray, kx, 5, 5);
-  const gy = convolve2d(gray, ky, 5, 5);
+  const gx = await convolve2d(gray, kx, 5, 5);
+  const gy = await convolve2d(gray, ky, 5, 5);
   const out = createImg(gray.w, gray.h, 1);
   for (let i = 0; i < out.data.length; i++) {
     out.data[i] = Math.sqrt(gx.data[i]! ** 2 + gy.data[i]! ** 2);
@@ -337,12 +406,17 @@ export function erode(gray: Img, kernelSize: number): Img {
  * For large kernels (>15), uses a two-pass separable rectangular max
  * approximation for speed, then masks to the ellipse on a final pass.
  */
-export function dilate(gray: Img, kernelSize: number): Img {
+export async function dilate(gray: Img, kernelSize: number): Promise<Img> {
+  const mask = makeEllipseKernel(kernelSize);
+
+  // Try GPU first
+  const gpu = await gpuDilate(gray, kernelSize, mask);
+  if (gpu) return gpu;
+
   const { w, h } = gray;
 
   if (kernelSize <= 15) {
     // Small kernel: brute-force (original approach)
-    const mask = makeEllipseKernel(kernelSize);
     const out = createImg(w, h, 1);
     const r = (kernelSize - 1) >> 1;
     for (let y = 0; y < h; y++) {
@@ -368,7 +442,6 @@ export function dilate(gray: Img, kernelSize: number): Img {
   // the corresponding horizontal span width. This gives exact elliptical
   // dilation in O(h * kernelSize + w * h) instead of O(w * h * ks^2).
   const r = (kernelSize - 1) >> 1;
-  const mask = makeEllipseKernel(kernelSize);
 
   // Precompute per-row x-span of the ellipse
   const rowMinX = new Int32Array(kernelSize);

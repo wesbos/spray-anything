@@ -7,53 +7,7 @@
     <title>Spray Anything</title>
   </head>
   <body>
-    <div id="app">
-      <h1>Spray Anything</h1>
-      <p class="subtitle">Drop an image to apply a spray paint effect</p>
-
-      <div id="drop-zone">
-        <p>Drag &amp; drop an image here</p>
-        <p>or</p>
-        <label class="file-label">
-          Choose file
-          <input type="file" id="file-input" accept="image/*" hidden />
-        </label>
-      </div>
-
-      <div id="samples">
-        <p class="samples-label">Or try a sample:</p>
-        <div class="samples-list">
-          <button class="sample-btn" data-src="/samples/syntax-logo.png">
-            <img src="/samples/syntax-logo.png" alt="Syntax logo" />
-          </button>
-        </div>
-      </div>
-
-      <label id="debug-toggle">
-        <input type="checkbox" id="debug-check" />
-        Show debug steps
-      </label>
-
-      <div id="progress-area" hidden>
-        <div id="progress-bar-track">
-          <div id="progress-bar-fill"></div>
-        </div>
-        <p id="progress-label">Starting...</p>
-      </div>
-
-      <div id="output-area" hidden>
-        <img id="output-img" alt="Spray paint result" />
-        <div id="output-actions">
-          <button id="download-btn">Download</button>
-          <button id="reset-btn">Try another</button>
-        </div>
-      </div>
-
-      <div id="debug-area" hidden>
-        <h2>Debug Steps</h2>
-        <div id="debug-grid"></div>
-      </div>
-    </div>
-    <script type="module" src="/src/main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
