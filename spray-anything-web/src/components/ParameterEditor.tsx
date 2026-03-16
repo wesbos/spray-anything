@@ -12,6 +12,7 @@ interface SliderRowProps {
   label: string;
   hint?: string;
   value: number;
+  defaultValue: number;
   min: number;
   max: number;
   step?: number;
@@ -19,11 +20,22 @@ interface SliderRowProps {
   disabled?: boolean;
 }
 
-function SliderRow({ label, hint, value, min, max, step = 1, onChange, disabled }: SliderRowProps) {
+function SliderRow({
+  label,
+  hint,
+  value,
+  defaultValue,
+  min,
+  max,
+  step = 1,
+  onChange,
+  disabled,
+}: SliderRowProps) {
+  const isModified = value !== defaultValue;
   return (
     <div className="param-row-wrap">
       <label className="param-row">
-        <span className="param-label">{label}</span>
+        <span className={`param-label ${isModified ? "param-modified" : ""}`}>{label}</span>
         <input
           type="range"
           min={min}
@@ -34,6 +46,14 @@ function SliderRow({ label, hint, value, min, max, step = 1, onChange, disabled 
           onChange={(e) => onChange(Number(e.target.value))}
         />
         <span className="param-value">{value}</span>
+        <button
+          className={`param-reset ${isModified ? "" : "param-reset-hidden"}`}
+          title={`Reset to ${defaultValue}`}
+          disabled={disabled || !isModified}
+          onClick={() => onChange(defaultValue)}
+        >
+          &times;
+        </button>
       </label>
       {hint && <span className="param-hint">{hint}</span>}
     </div>
@@ -44,16 +64,26 @@ interface SelectRowProps {
   label: string;
   hint?: string;
   value: string;
+  defaultValue: string;
   options: string[];
   onChange: (v: string) => void;
   disabled?: boolean;
 }
 
-function SelectRow({ label, hint, value, options, onChange, disabled }: SelectRowProps) {
+function SelectRow({
+  label,
+  hint,
+  value,
+  defaultValue,
+  options,
+  onChange,
+  disabled,
+}: SelectRowProps) {
+  const isModified = value !== defaultValue;
   return (
     <div className="param-row-wrap">
       <label className="param-row">
-        <span className="param-label">{label}</span>
+        <span className={`param-label ${isModified ? "param-modified" : ""}`}>{label}</span>
         <select value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
           {options.map((o) => (
             <option key={o} value={o}>
@@ -62,6 +92,14 @@ function SelectRow({ label, hint, value, options, onChange, disabled }: SelectRo
           ))}
         </select>
         <span className="param-value" />
+        <button
+          className={`param-reset ${isModified ? "" : "param-reset-hidden"}`}
+          title={`Reset to ${defaultValue}`}
+          disabled={disabled || !isModified}
+          onClick={() => onChange(defaultValue)}
+        >
+          &times;
+        </button>
       </label>
       {hint && <span className="param-hint">{hint}</span>}
     </div>
@@ -108,6 +146,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Distortion"
           hint="How wavy and warped the spray looks"
           value={params.rippleAmount}
+          defaultValue={DEFAULT_PARAMS.rippleAmount}
           min={0}
           max={50}
           disabled={disabled}
@@ -117,19 +156,17 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Spray angle"
           hint="Direction of the spray strokes"
           value={params.motionBlurAngle}
+          defaultValue={DEFAULT_PARAMS.motionBlurAngle}
           min={-180}
           max={180}
           disabled={disabled}
-          onChange={(v) => {
-            set("motionBlurAngle", v);
-            // Also update coverage blur angle to match
-            onChange({ ...params, motionBlurAngle: v, coverageMotionAngle: v });
-          }}
+          onChange={(v) => onChange({ ...params, motionBlurAngle: v, coverageMotionAngle: v })}
         />
         <SliderRow
           label="Streak length"
           hint="How streaky/blurred the spray is"
           value={params.motionBlurDistance}
+          defaultValue={DEFAULT_PARAMS.motionBlurDistance}
           min={0}
           max={30}
           disabled={disabled}
@@ -139,6 +176,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Effect strength"
           hint="Blend of spray effect vs original image"
           value={params.displacedBlendPct}
+          defaultValue={DEFAULT_PARAMS.displacedBlendPct}
           min={0}
           max={100}
           disabled={disabled}
@@ -148,6 +186,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Coverage"
           hint="How much spray texture covers the image (low = more gaps)"
           value={params.coverageLevelsHi}
+          defaultValue={DEFAULT_PARAMS.coverageLevelsHi}
           min={128}
           max={255}
           disabled={disabled}
@@ -157,6 +196,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Edge speckle spread"
           hint="How far scattered dots spread from edges"
           value={params.edgeDilateSize}
+          defaultValue={DEFAULT_PARAMS.edgeDilateSize}
           min={3}
           max={101}
           step={2}
@@ -167,6 +207,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Paint grain"
           hint="Darkness of the grainy paint texture (1 = none)"
           value={params.grainDarkFactor}
+          defaultValue={DEFAULT_PARAMS.grainDarkFactor}
           min={0.5}
           max={1}
           step={0.01}
@@ -177,6 +218,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
           label="Sharpness"
           hint="How sharp the final output is"
           value={params.sharpenSigma2}
+          defaultValue={DEFAULT_PARAMS.sharpenSigma2}
           min={0.5}
           max={10}
           step={0.1}
@@ -189,6 +231,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SelectRow
           label="Ripple size"
           value={params.rippleSize}
+          defaultValue={DEFAULT_PARAMS.rippleSize}
           options={["small", "medium", "large"]}
           disabled={disabled}
           onChange={(v) => set("rippleSize", v as SprayParams["rippleSize"])}
@@ -196,6 +239,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Roll X"
           value={params.rollDx}
+          defaultValue={DEFAULT_PARAMS.rollDx}
           min={-20}
           max={20}
           disabled={disabled}
@@ -204,6 +248,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Roll Y"
           value={params.rollDy}
+          defaultValue={DEFAULT_PARAMS.rollDy}
           min={-20}
           max={20}
           disabled={disabled}
@@ -212,6 +257,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Clouds seed"
           value={params.cloudsSeed}
+          defaultValue={DEFAULT_PARAMS.cloudsSeed}
           min={0}
           max={999}
           disabled={disabled}
@@ -220,6 +266,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Mezz seed"
           value={params.mezzSeed}
+          defaultValue={DEFAULT_PARAMS.mezzSeed}
           min={0}
           max={999}
           disabled={disabled}
@@ -228,6 +275,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Mezz blend %"
           value={params.coverageMezzBlend}
+          defaultValue={DEFAULT_PARAMS.coverageMezzBlend}
           min={0}
           max={100}
           disabled={disabled}
@@ -236,6 +284,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Coverage low"
           value={params.coverageLevelsLo}
+          defaultValue={DEFAULT_PARAMS.coverageLevelsLo}
           min={0}
           max={128}
           disabled={disabled}
@@ -244,6 +293,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Coverage blur dist"
           value={params.coverageMotionDist}
+          defaultValue={DEFAULT_PARAMS.coverageMotionDist}
           min={0}
           max={20}
           disabled={disabled}
@@ -252,6 +302,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Original blend %"
           value={params.slightOriginalPct}
+          defaultValue={DEFAULT_PARAMS.slightOriginalPct}
           min={0}
           max={100}
           disabled={disabled}
@@ -260,6 +311,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Edge blur"
           value={params.edgeBlurSigma}
+          defaultValue={DEFAULT_PARAMS.edgeBlurSigma}
           min={1}
           max={50}
           disabled={disabled}
@@ -268,6 +320,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Fine dots contrast"
           value={params.fineDotsContrast}
+          defaultValue={DEFAULT_PARAMS.fineDotsContrast}
           min={0}
           max={100}
           disabled={disabled}
@@ -276,6 +329,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Fine dots threshold"
           value={params.fineDotsThreshold}
+          defaultValue={DEFAULT_PARAMS.fineDotsThreshold}
           min={0}
           max={255}
           disabled={disabled}
@@ -284,6 +338,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Fine dots ripple"
           value={params.fineDotsRipple}
+          defaultValue={DEFAULT_PARAMS.fineDotsRipple}
           min={0}
           max={300}
           disabled={disabled}
@@ -292,6 +347,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Large dots dilate"
           value={params.largeDotsDilateSize}
+          defaultValue={DEFAULT_PARAMS.largeDotsDilateSize}
           min={3}
           max={31}
           step={2}
@@ -301,6 +357,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Large dots ripple"
           value={params.largeDotsRipple}
+          defaultValue={DEFAULT_PARAMS.largeDotsRipple}
           min={0}
           max={300}
           disabled={disabled}
@@ -309,6 +366,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Speckle scale"
           value={params.speckleDispScale}
+          defaultValue={DEFAULT_PARAMS.speckleDispScale}
           min={0}
           max={300}
           disabled={disabled}
@@ -317,6 +375,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Grain seed"
           value={params.grainSeed}
+          defaultValue={DEFAULT_PARAMS.grainSeed}
           min={0}
           max={999}
           disabled={disabled}
@@ -325,6 +384,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Sharpen sigma 1"
           value={params.sharpenSigma1}
+          defaultValue={DEFAULT_PARAMS.sharpenSigma1}
           min={0.1}
           max={2}
           step={0.1}
@@ -334,6 +394,7 @@ export function ParameterEditor({ params, onChange, disabled }: ParameterEditorP
         <SliderRow
           label="Max dimension"
           value={params.maxDim}
+          defaultValue={DEFAULT_PARAMS.maxDim}
           min={200}
           max={3000}
           step={100}

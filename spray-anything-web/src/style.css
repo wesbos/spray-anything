@@ -231,9 +231,9 @@ h2 {
 
 .param-row {
   display: grid;
-  grid-template-columns: 110px 1fr 44px;
+  grid-template-columns: 110px 1fr 40px 18px;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 12px;
 }
 
@@ -271,6 +271,32 @@ h2 {
   gap: 1px;
 }
 
+.param-modified {
+  color: var(--accent);
+}
+
+.param-reset {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.6;
+  width: 18px;
+  text-align: center;
+}
+
+.param-reset:hover:not(:disabled) {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.param-reset-hidden {
+  visibility: hidden;
+}
+
 .param-hint {
   font-size: 10px;
   color: var(--text-muted);
@@ -291,6 +317,56 @@ h2 {
 
 .debug-toggle input {
   accent-color: var(--accent);
+}
+
+/* ── Live Preview ── */
+.live-preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 8px;
+}
+
+.live-preview-toggle input {
+  accent-color: var(--accent);
+}
+
+.live-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 0.6s ease-in-out infinite alternate;
+  margin-left: 4px;
+}
+
+/* ── Output Image Wrapper ── */
+.output-img-wrapper {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.output-img.regenerating {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.regenerating-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  pointer-events: none;
 }
 
 /* ── Progress ── */

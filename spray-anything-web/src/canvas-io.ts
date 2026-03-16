@@ -1,4 +1,5 @@
 import { type Img, createImg, clamp } from "./image.ts";
+import { gpuGaussianBlur } from "./webgpu.ts";
 
 /** Convert an Img (RGB Float32) to an OffscreenCanvas with RGBA pixels */
 function imgToCanvas(img: Img): OffscreenCanvas {
@@ -75,8 +76,14 @@ export async function loadImageFromUrl(url: string): Promise<Img> {
   return canvasToImg(canvas);
 }
 
-/** Gaussian blur using Canvas filter API */
-export function gaussianBlur(img: Img, sigma: number): Img {
+/** Gaussian blur — GPU separable blur with Canvas fallback */
+export async function gaussianBlur(img: Img, sigma: number): Promise<Img> {
+  const gpu = await gpuGaussianBlur(img, sigma);
+  if (gpu) return gpu;
+  return gaussianBlurCanvas(img, sigma);
+}
+
+function gaussianBlurCanvas(img: Img, sigma: number): Img {
   // Pad the canvas by the blur radius to avoid edge darkening from
   // transparency bleed. CSS blur() takes sigma directly in px.
   const pad = Math.ceil(sigma * 3);

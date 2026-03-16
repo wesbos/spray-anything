@@ -1,6 +1,6 @@
 import { type Img, createImg, reflectCoord } from "./image.ts";
 import { SeededRNG } from "./rng.ts";
-import { gpuConvolve2d, gpuRemap, gpuDilate } from "./webgpu.ts";
+import { gpuConvolve2d, gpuRemap, gpuDilate, gpuErode, gpuRipple } from "./webgpu.ts";
 
 function sampleBilinear(img: Img, fx: number, fy: number): number[] {
   const { w, h, c } = img;
@@ -263,18 +263,32 @@ export async function ripple(
   for (let i = 0; i < h; i++) yJitter[i] = rng.uniform(0.85, 1.15);
   for (let i = 0; i < w; i++) xJitter[i] = rng.uniform(0.85, 1.15);
 
+  // Precompute per-row dx and per-column dy
+  const rowDx = new Float32Array(h);
+  for (let y = 0; y < h; y++) {
+    rowDx[y] = amount * Math.sin((2 * Math.PI * y) / (wl * yJitter[y]!));
+  }
+  const colDy = new Float32Array(w);
+  for (let x = 0; x < w; x++) {
+    colDy[x] = amount * Math.sin((2 * Math.PI * x) / (wl * xJitter[x]!));
+  }
+
+  // Try GPU ripple (uploads only h+w floats instead of 2*w*h)
+  const gpu = await gpuRipple(img, rowDx, colDy);
+  if (gpu) return gpu;
+
+  // CPU fallback: build full maps
   const mapX = new Float32Array(w * h);
   const mapY = new Float32Array(w * h);
   for (let y = 0; y < h; y++) {
+    const dx = rowDx[y]!;
+    const rowOff = y * w;
     for (let x = 0; x < w; x++) {
-      const idx = y * w + x;
-      const dx = amount * Math.sin((2 * Math.PI * y) / (wl * yJitter[y]!));
-      const dy = amount * Math.sin((2 * Math.PI * x) / (wl * xJitter[x]!));
-      mapX[idx] = x + dx;
-      mapY[idx] = y + dy;
+      mapX[rowOff + x] = x + dx;
+      mapY[rowOff + x] = y + colDy[x]!;
     }
   }
-  return remap(img, mapX, mapY);
+  return remapCpu(img, mapX, mapY);
 }
 
 export function buildMotionKernel(
@@ -378,8 +392,11 @@ export function makeEllipseKernel(size: number): Uint8Array {
   return mask;
 }
 
-export function erode(gray: Img, kernelSize: number): Img {
+export async function erode(gray: Img, kernelSize: number): Promise<Img> {
   const mask = makeEllipseKernel(kernelSize);
+  const gpu = await gpuErode(gray, kernelSize, mask);
+  if (gpu) return gpu;
+
   const out = createImg(gray.w, gray.h, 1);
   const { w, h } = gray;
   const r = (kernelSize - 1) >> 1;
